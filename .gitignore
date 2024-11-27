@@ -12,6 +12,7 @@ java-mail-test/bin
 *.wav
 
 *.pth
+tokenizer.model
 *.safetensors
 tokenizer.json
 
