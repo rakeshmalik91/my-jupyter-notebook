@@ -5,10 +5,6 @@
 .DS_Store
 */DS_Store
 
-java-mail-test/*.jar
-java-mail-test/downloads
-java-mail-test/bin
-
 *.wav
 
 *.pth
@@ -19,3 +15,6 @@ tokenizer.json
 secret.yml
 client_secret.json
 token.pickle
+
+insect-dataset/*/*
+!insect-dataset/moth/*.pth
