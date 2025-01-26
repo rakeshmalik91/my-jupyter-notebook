@@ -16,5 +16,4 @@ secret.yml
 client_secret.json
 token.pickle
 
-insect-dataset/*/*
-!insect-dataset/moth/*.pth
+insect-dataset
