@@ -54,6 +54,7 @@ def split_data_for_train_and_val(data_dir, test_dir, val_dir, train_dir, test_da
                     shutil.copy(file, target_dir_path)
 
     print(f"Class count: {class_cnt}")
+    print(f"Total data count: {train_data_cnt+val_data_cnt+test_data_cnt}")
     print(f"Training data count: {train_data_cnt}")
     print(f"Validation data count: {val_data_cnt}")
     print(f"Test data count: {test_data_cnt}")
@@ -71,7 +72,7 @@ def match_val_class_to_idx_with_train(model_data):
         model_data['datasets']['val'].samples = new_val_samples
     return model_data
     
-def prepare_dalaloaders(model_data, train_dir, val_dir, batch_size, image_size):
+def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size):
     model_data['transform'] = {
         'train': transforms.Compose([
             transforms.Resize((int(image_size * 1.1), int(image_size * 1.1))),
@@ -101,7 +102,7 @@ def prepare_dalaloaders(model_data, train_dir, val_dir, batch_size, image_size):
 
 def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', image_size=224):
     model_data = {}
-    model_data = prepare_dalaloaders(model_data, train_dir, val_dir, batch_size, image_size)
+    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size)
     model_data['class_names'] = model_data['datasets']['train'].classes
 
     if arch == 'resnet152':
@@ -127,7 +128,7 @@ def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', 
     return model_data
     
 def prepare_for_retraining(model_data, train_dir, val_dir, batch_size=32, image_size=224):
-    model_data = prepare_dalaloaders(model_data, train_dir, val_dir, batch_size, image_size)
+    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size)
 
     new_classes_cnt = 0
     new_classes = []
@@ -191,7 +192,7 @@ def predict(image_path, model_data):
         _, preds = torch.max(outputs, 1)
     try:
         return model_data['class_names'][preds[0]]
-    except (Exception):
+    except Exception:
         return None
 
 def predict_top_k(image_path, model_data, k):
@@ -203,7 +204,7 @@ def predict_top_k(image_path, model_data, k):
         top_probs, top_indices = torch.topk(probabilities, k)
     try:
         return {model_data['class_names'][top_indices[0][i]]: top_probs[0][i].item() for i in range(0, k)}
-    except (Exception):
+    except Exception:
         return None
 
 def validate_prediction_in_dir(test_dir, model_data):
@@ -239,30 +240,40 @@ def test(model_data, test_dir, print_failures=True):
         print("Failures:")
         pprint.pprint(prediction['failures'])
 
-def test_top_k(model_data, test_dir, k, print_preds=True, print_accuracy=True):
+def test_top_k(model_data, test_dir, k, print_preds=True, print_accuracy=True, print_top1_accuracy=True):
     model_data['model'].eval()
     top1_success_cnt = 0
+    top1_genus_success_cnt = 0
     success_cnt = 0
+    genus_success_cnt = 0
     total_cnt = 0
     for file in Path(test_dir).iterdir():
         if print_preds:
-            print(f"{file.name.split('.')[0]:25}:", end=' ')
+            print(f"{file.name.split('.')[0]:30}:", end=' ')
         total_cnt = total_cnt + 1
         probs = predict_top_k(file, model_data, k)
+        genus_matched = False
         for pred, prob in probs.items():
             if pred in file.name:
                 success_cnt = success_cnt + 1
+            if pred.split('-')[0] in file.name:
+                genus_matched = True
             if print_preds:
                 print(f"{pred}({prob:.3f}) ", end=' ')
+        if genus_matched:
+            genus_success_cnt = genus_success_cnt + 1
         if [pred for pred, prob in probs.items()][0] in file.name:
             top1_success_cnt = top1_success_cnt + 1
+        if [pred.split('-')[0] for pred, prob in probs.items()][0] in file.name:
+            top1_genus_success_cnt = top1_genus_success_cnt + 1
         if print_preds:
             print()
     if print_accuracy:
         if print_preds:
             print("-"*10)
-        print(f"Top {k} accuracy: {success_cnt} / {total_cnt} -> {success_cnt/total_cnt:.3f}")
-        print(f"Top 1 accuracy: {top1_success_cnt} / {total_cnt} -> {top1_success_cnt/total_cnt:.3f}")
+        if print_top1_accuracy:
+            print(f"Top 1 accuracy: {top1_success_cnt} / {total_cnt} -> {top1_success_cnt/total_cnt:.3f}, genus matched: {top1_genus_success_cnt} / {total_cnt} -> {top1_genus_success_cnt/total_cnt:.3f}")
+        print(f"Top {k} accuracy: {success_cnt} / {total_cnt} -> {success_cnt/total_cnt:.3f}, genus matched: {genus_success_cnt} / {total_cnt} -> {genus_success_cnt/total_cnt:.3f}")
 
 def extract_proto_dataset(data_dir, proto_data_dir, limit):
     file_cnt = 0
@@ -279,3 +290,19 @@ def extract_proto_dataset(data_dir, proto_data_dir, limit):
                     file_cnt = file_cnt + 1
                     if(file_cnt >= limit):
                         return
+
+def class_count(data_dir, class_regex=None):
+    class_cnt = 0
+    for class_dir in Path(data_dir).iterdir():
+        if class_dir.is_dir() and os.listdir(class_dir) and (not class_regex or re.match(class_regex, class_dir.name)):
+            class_cnt += 1
+    return class_cnt
+    
+def image_count(data_dir):
+    img_cnt = 0
+    for class_dir in Path(data_dir).iterdir():
+        if class_dir.is_dir():
+            for file in Path(class_dir).iterdir():
+                if file.is_file():
+                    img_cnt += 1
+    return img_cnt
