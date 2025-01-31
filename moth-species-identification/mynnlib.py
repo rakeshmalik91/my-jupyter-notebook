@@ -185,6 +185,7 @@ def train(model_data, num_epochs, model_path, phases=['train', 'val']):
         torch.save(model_data, model_path)
 
 def predict(image_path, model_data):
+    model_data['model'].eval()
     image = Image.open(image_path).convert("RGB")
     image = model_data['transform']['val'](image).unsqueeze(0).to(model_data['device'])
     with torch.no_grad():
@@ -196,6 +197,7 @@ def predict(image_path, model_data):
         return None
 
 def predict_top_k(image_path, model_data, k):
+    model_data['model'].eval()
     image = Image.open(image_path).convert("RGB")
     image = model_data['transform']['val'](image).unsqueeze(0).to(model_data['device'])
     with torch.no_grad():
@@ -208,6 +210,7 @@ def predict_top_k(image_path, model_data, k):
         return None
 
 def validate_prediction_in_dir(test_dir, model_data):
+    model_data['model'].eval()
     total = 0
     success = 0
     failures = {}
