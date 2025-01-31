@@ -272,8 +272,8 @@ def test_top_k(model_data, test_dir, k, print_preds=True, print_accuracy=True, p
         if print_preds:
             print("-"*10)
         if print_top1_accuracy:
-            print(f"Top 1 accuracy: {top1_success_cnt} / {total_cnt} -> {top1_success_cnt/total_cnt:.3f}, genus matched: {top1_genus_success_cnt} / {total_cnt} -> {top1_genus_success_cnt/total_cnt:.3f}")
-        print(f"Top {k} accuracy: {success_cnt} / {total_cnt} -> {success_cnt/total_cnt:.3f}, genus matched: {genus_success_cnt} / {total_cnt} -> {genus_success_cnt/total_cnt:.3f}")
+            print(f"Top   1 accuracy: {top1_success_cnt}/{total_cnt} -> {100*top1_success_cnt/total_cnt:.2f}%, genus matched: {top1_genus_success_cnt}/{total_cnt} -> {100*top1_genus_success_cnt/total_cnt:.2f}%")
+        print(f"Top {k:3} accuracy: {success_cnt}/{total_cnt} -> {100*success_cnt/total_cnt:.2f}%, genus matched: {genus_success_cnt}/{total_cnt} -> {100*genus_success_cnt/total_cnt:.2f}%")
 
 def extract_proto_dataset(data_dir, proto_data_dir, limit):
     file_cnt = 0
