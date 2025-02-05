@@ -261,7 +261,9 @@ def test_top_k(model_data, test_dir, k, print_preds=True, print_accuracy=True, p
                 success_cnt = success_cnt + 1
             if pred.split('-')[0] in file.name:
                 genus_matched = True
-            if print_preds:
+            if print_preds and pred in file.name:
+                print(f"\033[32m{pred}\033[0m({prob:.3f}) ", end=' ')
+            elif print_preds:
                 print(f"{pred}({prob:.3f}) ", end=' ')
         if genus_matched:
             genus_success_cnt = genus_success_cnt + 1

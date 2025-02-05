@@ -16,7 +16,7 @@ secret.yml
 client_secret.json
 token.pickle
 
-moth-species-identification/insect-dataset
+insect-species-identification/insect-dataset
 
 .idea
 .ipynb_checkpoints
