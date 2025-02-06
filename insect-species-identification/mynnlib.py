@@ -72,16 +72,34 @@ def match_val_class_to_idx_with_train(model_data):
         model_data['datasets']['val'].samples = new_val_samples
     return model_data
     
-def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size):
-    model_data['transform'] = {
-        'train': transforms.Compose([
+def get_train_transforms(image_size, robustness):
+    if robustness < 0.5:
+        return [
+            transforms.Resize((int(image_size * 1.1), int(image_size * 1.1))),
+            transforms.CenterCrop((image_size, image_size)),
+            transforms.RandomRotation(45*robustness),
+            transforms.ColorJitter(brightness=0.2*robustness, contrast=0.2*robustness),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
+    else:
+        return [
             transforms.Resize((int(image_size * 1.1), int(image_size * 1.1))),
             transforms.CenterCrop((image_size, image_size)),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
+            transforms.RandomVerticalFlip(),
+            transforms.RandomRotation(45*robustness),
+            transforms.ColorJitter(brightness=0.2*robustness, contrast=0.2*robustness),
+            transforms.RandomResizedCrop(image_size),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ]),
+        ]
+
+
+def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness):
+    
+    model_data['transform'] = {
+        'train': transforms.Compose(get_train_transforms(image_size, robustness)),
         'val': transforms.Compose([
             transforms.Resize((int(image_size * 1.1), int(image_size * 1.1))),
             transforms.CenterCrop((image_size, image_size)),
@@ -100,9 +118,9 @@ def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size):
     }
     return model_data
 
-def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', image_size=224):
+def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', image_size=224, robustness=0.3):
     model_data = {}
-    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size)
+    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness)
     model_data['class_names'] = model_data['datasets']['train'].classes
 
     if arch == 'resnet152':
@@ -127,8 +145,8 @@ def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', 
 
     return model_data
     
-def prepare_for_retraining(model_data, train_dir, val_dir, batch_size=32, image_size=224):
-    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size)
+def prepare_for_retraining(model_data, train_dir, val_dir, batch_size=32, image_size=224, robustness=0.3):
+    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness)
 
     new_classes_cnt = 0
     new_classes = []
@@ -152,8 +170,10 @@ def prepare_for_retraining(model_data, train_dir, val_dir, batch_size=32, image_
     
     return model_data;
     
-def train(model_data, num_epochs, model_path, phases=['train', 'val']):
+def train(model_data, num_epochs, model_path, phases=['train', 'val'], break_at_val_acc_diff=None):
     start_time = time.time()
+    last_val_acc = 0
+    break_loop = False
     for epoch in range(num_epochs):
         print(f"Epoch {(epoch+1):4} / {num_epochs:4}", end=' ')
         for phase in phases:
@@ -175,14 +195,19 @@ def train(model_data, num_epochs, model_path, phases=['train', 'val']):
                         model_data['optimizer'].step()
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
-    
             epoch_loss = running_loss / len(model_data['datasets'][phase])
             epoch_acc = running_corrects.double() / len(model_data['datasets'][phase])
             print(f" | {phase.capitalize()} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}", end=' ')
             if phase == 'train':
                 model_data['scheduler'].step()
+            if phase == 'val':
+                if break_at_val_acc_diff and epoch_acc - last_val_acc < break_at_val_acc_diff:
+                    break_loop = True
+                last_val_acc = epoch_acc
         print(f" | Elapsed time: {datetime.timedelta(seconds=(time.time() - start_time))}")
         torch.save(model_data, model_path)
+        if break_loop:
+            break;
 
 def predict(image_path, model_data):
     model_data['model'].eval()
