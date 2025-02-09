@@ -97,7 +97,6 @@ def get_train_transforms(image_size, robustness):
 
 
 def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness):
-    
     model_data['transform'] = {
         'train': transforms.Compose(get_train_transforms(image_size, robustness)),
         'val': transforms.Compose([
@@ -118,15 +117,19 @@ def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, 
     }
     return model_data
 
-def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', image_size=224, robustness=0.3):
+def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', image_size=224, robustness=0.3, lr=0.001, weight_decay=None, label_smoothing=None):
     model_data = {}
     model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness)
     model_data['class_names'] = model_data['datasets']['train'].classes
 
     if arch == 'resnet152':
         model_data['model'] = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
+    elif arch == 'resnet101':
+        model_data['model'] = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
     elif arch == 'resnet50':
         model_data['model'] = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+    elif arch == 'resnet34':
+        model_data['model'] = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
     else:
         model_data['model'] = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         
@@ -139,8 +142,8 @@ def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', 
     model_data['model'] = model_data['model'].to(model_data['device'])
     print(f"device: {model_data['device']}")
     
-    model_data['criterion'] = nn.CrossEntropyLoss()
-    model_data['optimizer'] = torch.optim.Adam(model_data['model'].parameters(), lr=0.001)
+    model_data['criterion'] = nn.CrossEntropyLoss(label_smoothing)
+    model_data['optimizer'] = torch.optim.Adam(model_data['model'].parameters(), lr=lr, weight_decay=weight_decay)
     model_data['scheduler'] = torch.optim.lr_scheduler.StepLR(model_data['optimizer'], step_size=7, gamma=0.1)
 
     return model_data
@@ -172,7 +175,7 @@ def prepare_for_retraining(model_data, train_dir, val_dir, batch_size=32, image_
     
 def train(model_data, num_epochs, model_path, phases=['train', 'val'], break_at_val_acc_diff=None):
     start_time = time.time()
-    last_val_acc = 0
+    last_val_acc = -1.0
     break_loop = False
     for epoch in range(num_epochs):
         print(f"Epoch {(epoch+1):4} / {num_epochs:4}", end=' ')
@@ -205,7 +208,7 @@ def train(model_data, num_epochs, model_path, phases=['train', 'val'], break_at_
                     break_loop = True
                 last_val_acc = epoch_acc
         print(f" | Elapsed time: {datetime.timedelta(seconds=(time.time() - start_time))}")
-        torch.save(model_data, model_path)
+        torch.save(model_data, model_path.replace("###", f"{epoch:04}"))
         if break_loop:
             break;
 
@@ -268,7 +271,7 @@ def test(model_data, test_dir, print_failures=True):
         print("Failures:")
         pprint.pprint(prediction['failures'])
 
-def test_top_k(model_data, test_dir, k, print_preds=True, print_accuracy=True, print_top1_accuracy=True):
+def test_top_k(model_data, test_dir, k, print_preds=True, print_accuracy=True, print_top1_accuracy=True, print_no_match=False):
     model_data['model'].eval()
     top1_success_cnt = 0
     top1_genus_success_cnt = 0
@@ -281,8 +284,10 @@ def test_top_k(model_data, test_dir, k, print_preds=True, print_accuracy=True, p
         total_cnt = total_cnt + 1
         probs = predict_top_k(file, model_data, k)
         genus_matched = False
+        species_matched = False
         for pred, prob in probs.items():
             if pred in file.name:
+                species_matched = True
                 success_cnt = success_cnt + 1
             if pred.split('-')[0] in file.name:
                 genus_matched = True
@@ -297,6 +302,15 @@ def test_top_k(model_data, test_dir, k, print_preds=True, print_accuracy=True, p
         if [pred.split('-')[0] for pred, prob in probs.items()][0] in file.name:
             top1_genus_success_cnt = top1_genus_success_cnt + 1
         if print_preds:
+            print()
+        if not print_preds and print_no_match and not species_matched:
+            print(f"{file.name.split('.')[0]}:", end=' ')
+            i = 0
+            for pred, prob in probs.items():
+                if i % 4 == 0:
+                    print("\n\t", end=' ')
+                print(f"\033[{'33' if genus_matched else '31'}m{pred}\033[0m({prob:.3f}) ", end=' ')
+                i += 1
             print()
     if print_accuracy:
         if print_preds:
