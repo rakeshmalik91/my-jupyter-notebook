@@ -17,6 +17,7 @@ client_secret.json
 token.pickle
 
 insect-species-identification/insect-dataset
+insect-species-identification/models
 
 .idea
 .ipynb_checkpoints
