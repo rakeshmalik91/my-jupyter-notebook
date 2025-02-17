@@ -8,6 +8,7 @@
 *.wav
 
 *.pth
+*.pt
 tokenizer.model
 *.safetensors
 tokenizer.json
@@ -28,3 +29,5 @@ __pycache__
 *.zip
 *.rar
 *.7z
+
+*.apk

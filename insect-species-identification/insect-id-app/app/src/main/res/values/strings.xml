@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Insect ID</string>
+    <string name="insect_identification">Insect Identification</string>
+    <string name="select_image">Select Image</string>
+    <string name="predicting">Predicting…</string>
+    <string name="use_model">Use Model:</string>
+</resources>
