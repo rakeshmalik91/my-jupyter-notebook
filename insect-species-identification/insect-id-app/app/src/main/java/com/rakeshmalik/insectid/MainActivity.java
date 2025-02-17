@@ -22,11 +22,15 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+
+import com.yalantis.ucrop.UCrop;
+
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.Formatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -96,8 +100,9 @@ public class MainActivity extends AppCompatActivity {
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     photoUri = result.getData().getData();
-                    imageView.setImageURI(photoUri);
-                    executorService.submit(new PredictRunnable());
+                    if (photoUri != null) {
+                        launchImageCrop();
+                    }
                 }
             });
 
@@ -105,8 +110,7 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<Intent> cameraLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == RESULT_OK && photoUri != null) {
-                    imageView.setImageURI(photoUri);
-                    executorService.submit(new PredictRunnable());
+                    launchImageCrop();
                 } else {
                     Toast.makeText(this, "Failed to capture image", Toast.LENGTH_SHORT).show();
                 }
@@ -185,6 +189,31 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void launchImageCrop() {
+        imageView.setImageURI(photoUri);
+        File croppedFile = new File(getCacheDir(), "cropped.jpg");
+        if (croppedFile.exists()) {
+            croppedFile.delete();
+        }
+        Uri croppedUri = Uri.fromFile(new File(getCacheDir(), "cropped.jpg"));
+        UCrop.of(photoUri, croppedUri)
+                .withAspectRatio(1, 1)
+                .withMaxResultSize(300, 300)
+                .start(this);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == UCrop.REQUEST_CROP && resultCode == RESULT_OK) {
+            photoUri = UCrop.getOutput(data);
+            if (photoUri != null) {
+                imageView.setImageURI(photoUri);
+                executorService.submit(new PredictRunnable());
+            }
+        }
+    }
+
     public static Integer[] getTopKIndices(float[] array, int k) {
         Integer[] indices = new Integer[array.length];
         for (int i = 0; i < array.length; i++) {
@@ -195,8 +224,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String predict() {
-        String modelName = "m.checkpoint." + selectedModelType.modelName + ".pt";
-        String classListName = "classes." + selectedModelType.modelName + ".json";
+        String modelName = String.format(Constants.MODEL_FILE_NAME_FORMAT, selectedModelType.modelName);
+        String classListName = String.format(Constants.CLASSES_FILE_NAME_FORMAT, selectedModelType.modelName);
 
         try {
             String modelPath = ModelLoader.assetFilePath(this, modelName);
@@ -208,19 +237,26 @@ public class MainActivity extends AppCompatActivity {
             Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(resizedBitmap,
                     new float[]{0.485f, 0.456f, 0.406f},
                     new float[]{0.229f, 0.224f, 0.225f});
-            Tensor outputTensor = model.forward(IValue.from(inputTensor)).toTensor();
-            float[] scores = toSoftMax(outputTensor.getDataAsFloatArray());
-            Log.d("Prediction", "scores: " + Arrays.toString(scores));
-            Integer[] predictedClass = getTopKIndices(scores, 10);
 
+            Tensor outputTensor = model.forward(IValue.from(inputTensor)).toTensor();
+            float[] logitScores = outputTensor.getDataAsFloatArray();
+            Log.d("Prediction", "scores: " + Arrays.toString(logitScores));
+            float[] softMaxScores = toSoftMax(logitScores.clone());
+            Log.d("Prediction", "softMaxScores: " + Arrays.toString(softMaxScores));
+
+            int k = Constants.MAX_PREDICTIONS;
+            Integer[] predictedClass = getTopKIndices(softMaxScores, k);
+            Log.d("Prediction", "Top " + k + " scores: " + Arrays.stream(predictedClass).map(c -> logitScores[c]).collect(Collectors.toList()));
+            Log.d("Prediction", "Top " + k + " softMaxScores: " + Arrays.stream(predictedClass).map(c -> softMaxScores[c]).collect(Collectors.toList()));
 
             List<String> classLabels = ModelLoader.loadClassLabels(this, classListName);
-            final int matches = totalMatches(scores);
-            List<String> predictions = Arrays.stream(predictedClass).map(c -> {
-                return classLabels.get(c) + " - " + String.format("%.2f", scores[c]*100) + "%";
-            }).collect(Collectors.toList());
+            List<String> predictions = Arrays.stream(predictedClass)
+                    .filter(c -> softMaxScores[c] > Constants.MIN_ACCEPTED_SOFTMAX)
+                    .filter(c -> logitScores[c] > Constants.MIN_ACCEPTED_LOGIT)
+                    .map(c -> classLabels.get(c) + " - " + String.format("%.2f", softMaxScores[c] * 100) + "%")
+                    .collect(Collectors.toList());
             Log.d("Prediction", "Predicted class: " + predictions);
-            return String.join("\n", predictions);
+            return predictions.isEmpty() ? getString(R.string.no_match_found) : String.join("\n", predictions);
         } catch(Exception ex) {
             Log.e("Predict", "Exception during prediction", ex);
             Toast.makeText(this, "Exception during prediction", Toast.LENGTH_SHORT).show();
@@ -237,17 +273,6 @@ public class MainActivity extends AppCompatActivity {
             scores[i] = (float) Math.exp(scores[i]) / sumExp;
         }
         return scores;
-    }
-
-    private int totalMatches(float[] scores) {
-        int matches = 0;
-        final float threshold = 0.75f;
-        for (float score : scores) {
-            if (score >= threshold) {
-                matches++;
-            }
-        }
-        return matches;
     }
 
     class PredictRunnable implements Runnable {

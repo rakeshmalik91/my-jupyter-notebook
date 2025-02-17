@@ -43,4 +43,6 @@ dependencies {
     implementation(libs.pytorch.android)
     implementation(libs.pytorch.android.torchvision)
     implementation(libs.gson)
+    implementation(libs.ucrop)
+
 }
