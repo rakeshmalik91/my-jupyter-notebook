@@ -32,7 +32,7 @@ public class PredictionManager {
             List<String> classLabels = ModelLoader.loadClassLabels(context, classListName);
             Map<String, Map<String, String>> classDetails = ModelLoader.loadClassDetails(context, classDetailsName);
 
-            Log.d("predict", "Loading photo: " + photoUri);
+            Log.d(LOG_TAG, "Loading photo: " + photoUri);
             Bitmap bitmap = MediaStore.Images.Media.getBitmap(context.getContentResolver(), photoUri);
             Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, 224, 224, true);
             Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(resizedBitmap,
@@ -41,34 +41,47 @@ public class PredictionManager {
 
             Tensor outputTensor = model.forward(IValue.from(inputTensor)).toTensor();
             float[] logitScores = outputTensor.getDataAsFloatArray();
-            Log.d("predict", "scores: " + Arrays.toString(logitScores));
+            Log.d(LOG_TAG, "scores: " + Arrays.toString(logitScores));
             float[] softMaxScores = toSoftMax(logitScores.clone());
-            Log.d("predict", "softMaxScores: " + Arrays.toString(softMaxScores));
+            Log.d(LOG_TAG, "softMaxScores: " + Arrays.toString(softMaxScores));
 
             int k = MAX_PREDICTIONS;
             Integer[] predictedClass = getTopKIndices(softMaxScores, k);
-            Log.d("predict", "Top " + k + " scores: " + Arrays.stream(predictedClass).map(c -> logitScores[c]).collect(Collectors.toList()));
-            Log.d("predict", "Top " + k + " softMaxScores: " + Arrays.stream(predictedClass).map(c -> softMaxScores[c]).collect(Collectors.toList()));
+            Log.d(LOG_TAG, "Top " + k + " scores: " + Arrays.stream(predictedClass).map(c -> logitScores[c]).collect(Collectors.toList()));
+            Log.d(LOG_TAG, "Top " + k + " softMaxScores: " + Arrays.stream(predictedClass).map(c -> softMaxScores[c]).collect(Collectors.toList()));
 
             List<String> predictions = Arrays.stream(predictedClass)
                     .filter(c -> softMaxScores[c] > MIN_ACCEPTED_SOFTMAX.get(modelType))
                     .filter(c -> logitScores[c] > MIN_ACCEPTED_LOGIT.get(modelType))
-                    .map(c -> {
-                        String className = classLabels.get(c);
-                        String value = "<font color='#FF7755'><i>" + className + "</i></font><br>";
-                        if(classDetails.containsKey(className) && classDetails.get(className).containsKey(NAME)) {
-                            value += "<font color='#FFFFFF'>" + classDetails.get(className).get(NAME) + "</font><br>";
-                        }
-                        value += String.format(Locale.getDefault(), "<font color='#777777'>~%.2f%% match</font><br><br>", softMaxScores[c] * 100);
-                        return value;
-                    })
+                    .map(c -> classNameHtml(classLabels.get(c)) + getSpeciesNameHtml(classLabels.get(c), classDetails) + getScoreHtml(softMaxScores[c]))
                     .collect(Collectors.toList());
-            Log.d("predict", "Predicted class: " + predictions);
+            Log.d(LOG_TAG, "Predicted class: " + predictions);
             return predictions.isEmpty() ? context.getString(R.string.no_match_found) : String.join("\n", predictions);
         } catch(Exception ex) {
-            Log.e("predict", "Exception during prediction", ex);
+            Log.e(LOG_TAG, "Exception during prediction", ex);
         }
         return "Failed to predict!!!";
+    }
+
+    private static String classNameHtml(String className) {
+        return "<font color='#FF7755'><i>" + className + "</i></font><br>";
+    }
+
+    private static String getSpeciesNameHtml(String className, Map<String, Map<String, String>> classDetails) {
+        String speciesName = "";
+        if(classDetails.containsKey(className) && classDetails.get(className).containsKey(NAME)) {
+            speciesName = classDetails.get(className).get(NAME);
+        }
+        if(speciesName.isBlank()) {
+            speciesName = Arrays.stream(className.replaceAll("-spp$", "-spp.").split("-"))
+                    .map(s -> s.substring(0, 1).toUpperCase() + s.substring(1))
+                    .collect(Collectors.joining(" "));
+        }
+        return "<font color='#FFFFFF'>" + speciesName + "</font><br>";
+    }
+
+    private static String getScoreHtml(Float score) {
+        return String.format(Locale.getDefault(), "<font color='#777777'>~%.2f%% match</font><br><br>", score * 100);
     }
 
     private static float[] toSoftMax(float[] scores) {

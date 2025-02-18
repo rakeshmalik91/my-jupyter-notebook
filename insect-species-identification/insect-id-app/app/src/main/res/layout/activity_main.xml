@@ -43,13 +43,14 @@
 
     </LinearLayout>
 
-
     <ImageView
         android:id="@+id/imageView"
-        android:layout_width="179dp"
-        android:layout_height="182dp"
+        android:layout_width="180dp"
+        android:layout_height="180dp"
         android:layout_marginTop="16dp"
+        android:contentDescription="@string/image_to_be_classified"
         android:scaleType="centerCrop"
+        android:clipToOutline="true"
         android:background="@drawable/border"/>
 
     <Button
@@ -83,6 +84,7 @@
             android:minHeight="200dp"
             android:gravity="center"
             android:textSize="18sp" />
+
     </ScrollView>
 
 

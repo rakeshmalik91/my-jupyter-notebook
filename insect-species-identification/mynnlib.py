@@ -59,9 +59,10 @@ def split_data_for_train_and_val(data_dir, test_dir, val_dir, train_dir, test_da
     print(f"Validation data count: {val_data_cnt}")
     print(f"Test data count: {test_data_cnt}")
 
-def match_val_class_to_idx_with_train(model_data):
-    print(f"train class count: {len(model_data['datasets']['train'].class_to_idx)}")
-    print(f"val class count: {len(model_data['datasets']['val'].class_to_idx)}")
+def match_val_class_to_idx_with_train(model_data, silent=False):
+    if not silent:
+        print(f"train class count: {len(model_data['datasets']['train'].class_to_idx)}")
+        print(f"val class count: {len(model_data['datasets']['val'].class_to_idx)}")
     if len(model_data['datasets']['val'].class_to_idx) != len(model_data['datasets']['train'].class_to_idx):
         model_data['datasets']['val'].class_to_idx =  model_data['datasets']['train'].class_to_idx
         new_val_samples = []
@@ -96,7 +97,7 @@ def get_train_transforms(image_size, robustness):
         ]
 
 
-def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness):
+def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness, silent=True):
     model_data['transform'] = {
         'train': transforms.Compose(get_train_transforms(image_size, robustness)),
         'val': transforms.Compose([
@@ -110,16 +111,16 @@ def prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, 
         'train': datasets.ImageFolder(root=train_dir, transform=model_data['transform']['train']),
         'val': datasets.ImageFolder(root=val_dir, transform=model_data['transform']['val']),
     }
-    model_data = match_val_class_to_idx_with_train(model_data)
+    model_data = match_val_class_to_idx_with_train(model_data, silent)
     model_data['dataloaders'] = {
         'train': DataLoader(model_data['datasets']['train'], batch_size=batch_size, shuffle=True),
         'val': DataLoader(model_data['datasets']['val'], batch_size=batch_size, shuffle=False),
     }
     return model_data
 
-def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', image_size=224, robustness=0.3, lr=0.001, weight_decay=None, label_smoothing=None):
+def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', image_size=224, robustness=0.3, lr=0.001, weight_decay=None, label_smoothing=None, silent=False):
     model_data = {}
-    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness)
+    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness, silent)
     model_data['class_names'] = model_data['datasets']['train'].classes
 
     if arch == 'resnet152':
@@ -136,11 +137,13 @@ def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', 
     model_data['num_classes'] = len(model_data['class_names'])
     model_data['num_features'] = model_data['model'].fc.in_features
     model_data['model'].fc = nn.Linear(model_data['num_features'], model_data['num_classes'])
-    print(f"feature count: {model_data['num_features']}")
+    if not silent:
+        print(f"feature count: {model_data['num_features']}")
     
     model_data['device'] = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model_data['model'] = model_data['model'].to(model_data['device'])
-    print(f"device: {model_data['device']}")
+    if not silent:
+        print(f"device: {model_data['device']}")
     
     model_data['criterion'] = nn.CrossEntropyLoss(label_smoothing)
     model_data['optimizer'] = torch.optim.Adam(model_data['model'].parameters(), lr=lr, weight_decay=weight_decay)
@@ -148,8 +151,8 @@ def init_model_for_training(train_dir, val_dir, batch_size=32, arch='resnet18', 
 
     return model_data
     
-def prepare_for_retraining(model_data, train_dir, val_dir, batch_size=32, image_size=224, robustness=0.3):
-    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness)
+def prepare_for_retraining(model_data, train_dir, val_dir, batch_size=32, image_size=224, robustness=0.3, silent=False):
+    model_data = prepare_dataloaders(model_data, train_dir, val_dir, batch_size, image_size, robustness, silent)
 
     new_classes_cnt = 0
     new_classes = []
@@ -160,16 +163,19 @@ def prepare_for_retraining(model_data, train_dir, val_dir, batch_size=32, image_
             new_classes.append(class_name)
     old_num_classes = model_data['num_classes']
     model_data['num_classes'] = len(model_data['class_names'])
-    print(f"{new_classes_cnt} new classes added: {new_classes}")
+    if not silent:
+        print(f"{new_classes_cnt} new classes added: {new_classes}")
     
     old_fc_weights = model_data['model'].fc.weight.data[:old_num_classes]
     model_data['model'].fc = nn.Linear(model_data['num_features'], model_data['num_classes'])
     model_data['model'].fc.weight.data[:old_num_classes] = old_fc_weights
-    print(f"feature count: {model_data['num_features']}")
+    if not silent:
+        print(f"feature count: {model_data['num_features']}")
     
     model_data['device'] = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model_data['model'] = model_data['model'].to(model_data['device'])
-    print(f"device: {model_data['device']}")
+    if not silent:
+        print(f"device: {model_data['device']}")
     
     return model_data;
     
@@ -177,6 +183,7 @@ def train(model_data, num_epochs, model_path, phases=['train', 'val'], break_at_
     start_time = time.time()
     last_val_acc = -1.0
     break_loop = False
+    response = {}
     for epoch in range(num_epochs):
         print(f"Epoch {(epoch+1):4} / {num_epochs:4}", end=' ')
         for phase in phases:
@@ -200,6 +207,8 @@ def train(model_data, num_epochs, model_path, phases=['train', 'val'], break_at_
                 running_corrects += torch.sum(preds == labels.data)
             epoch_loss = running_loss / len(model_data['datasets'][phase])
             epoch_acc = running_corrects.double() / len(model_data['datasets'][phase])
+            response[f"{phase}_loss"] = epoch_loss
+            response[f"{phase}_acc"] = epoch_acc
             print(f" | {phase.capitalize()} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}", end=' ')
             if phase == 'train':
                 model_data['scheduler'].step()
@@ -211,6 +220,7 @@ def train(model_data, num_epochs, model_path, phases=['train', 'val'], break_at_
         torch.save(model_data, model_path.replace("###", f"{epoch:04}"))
         if break_loop:
             break;
+    return response
 
 def predict(image_path, model_data):
     model_data['model'].eval()

@@ -1,5 +1,7 @@
 package com.rakeshmalik.insectid;
 
+import static com.rakeshmalik.insectid.Constants.LOG_TAG;
+
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -44,125 +46,177 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        Button buttonPickImage = findViewById(R.id.buttonPickImage);
-        imageView = findViewById(R.id.imageView);
-        buttonPickImage.setOnClickListener(v -> showImagePickerDialog());
-        executorService = Executors.newSingleThreadExecutor();
-        outputText = findViewById(R.id.outputText);
-        modelTypeSpinner = findViewById(R.id.modelTypeSpinner);
-        createModelTypeSpinner();
+        try {
+            super.onCreate(savedInstanceState);
+            setContentView(R.layout.activity_main);
+            Button buttonPickImage = findViewById(R.id.buttonPickImage);
+            imageView = findViewById(R.id.imageView);
+            buttonPickImage.setOnClickListener(v -> showImagePickerDialog());
+            executorService = Executors.newSingleThreadExecutor();
+            outputText = findViewById(R.id.outputText);
+            modelTypeSpinner = findViewById(R.id.modelTypeSpinner);
+            createModelTypeSpinner();
+        } catch (Exception ex) {
+            Log.e(LOG_TAG, "Exception in MainActivity.onCreate()", ex);
+            throw ex;
+        }
     }
 
     private final void createModelTypeSpinner() {
-        // Convert enum values to a string array for the Spinner
-        ModelType[] modelTypes = ModelType.values();
-        String[] modelTypeNames = new String[modelTypes.length];
-        for (int i = 0; i < modelTypes.length; i++) {
-            modelTypeNames[i] = modelTypes[i].displayName;
-        }
+        try {
+            // Convert enum values to a string array for the Spinner
+            ModelType[] modelTypes = ModelType.values();
+            String[] modelTypeNames = new String[modelTypes.length];
+            for (int i = 0; i < modelTypes.length; i++) {
+                modelTypeNames[i] = modelTypes[i].displayName;
+            }
 
-        // Create and set adapter for the Spinner
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modelTypeNames);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        modelTypeSpinner.setAdapter(adapter);
+            // Create and set adapter for the Spinner
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modelTypeNames);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            modelTypeSpinner.setAdapter(adapter);
 
-        // Set listener for Spinner item selection
-        modelTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                selectedModelType = modelTypes[position];
-                if(selectedModelType != null && photoUri != null) {
-                    executorService.submit(new PredictRunnable());
+            // Set listener for Spinner item selection
+            modelTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                    try {
+                        Log.d(LOG_TAG, position + " selected on spinner");
+                        selectedModelType = modelTypes[position];
+                        if(photoUri != null) {
+                            executorService.submit(new PredictRunnable());
+                        }
+                    } catch (Exception ex) {
+                        Log.e(LOG_TAG, "Exception during model type spinner item selection", ex);
+                        throw ex;
+                    }
                 }
-            }
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-                selectedModelType = null;
-            }
-        });
+                @Override
+                public void onNothingSelected(AdapterView<?> parent) {
+                    Log.d(LOG_TAG, "nothing selected on model type spinner");
+                    selectedModelType = null;
+                }
+            });
+        } catch (Exception ex) {
+            Log.e(LOG_TAG, "Exception during spinner creation", ex);
+            throw ex;
+        }
     }
 
     // Launcher for picking an image from the gallery
     private final ActivityResultLauncher<Intent> galleryLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                    photoUri = result.getData().getData();
-                    if (photoUri != null) {
-                        launchImageCrop();
+                try {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        photoUri = result.getData().getData();
+                        if (photoUri != null) {
+                            launchImageCrop();
+                        }
                     }
+                } catch (Exception ex) {
+                    Log.e(LOG_TAG, "Exception during gallery launcher", ex);
+                    throw ex;
                 }
             });
 
     // Launcher for taking a photo with the camera
     private final ActivityResultLauncher<Intent> cameraLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-                if (result.getResultCode() == RESULT_OK && photoUri != null) {
-                    launchImageCrop();
-                } else {
-                    Toast.makeText(this, "Failed to capture image", Toast.LENGTH_SHORT).show();
+                try {
+                    if (result.getResultCode() == RESULT_OK && photoUri != null) {
+                        launchImageCrop();
+                    } else {
+                        Toast.makeText(this, "Failed to capture image", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception ex) {
+                    Log.e(LOG_TAG, "Exception in camera launcher activity result", ex);
+                    throw ex;
                 }
             });
 
     // Request camera permission
     private final ActivityResultLauncher<String> cameraPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
-                if (isGranted) {
-                    openCamera();
-                } else {
-                    Toast.makeText(this, "Camera permission is required", Toast.LENGTH_SHORT).show();
+                try {
+                    if (isGranted) {
+                        openCamera();
+                    } else {
+                        Toast.makeText(this, "Camera permission is required", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception ex) {
+                    Log.e(LOG_TAG, "Exception in camera permission launcher activity result", ex);
+                    throw ex;
                 }
             });
 
     // Show dialog to choose Gallery or Camera
     private void showImagePickerDialog() {
-        String[] options = {"Gallery", "Camera"};
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Select an Option");
-        builder.setItems(options, (dialog, which) -> {
-            if (which == 0) {
-                openGallery();
-            } else {
-                checkCameraPermission();
-            }
-        });
-        builder.show();
+        try {
+            String[] options = {"Gallery", "Camera"};
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("Select an Option");
+            builder.setItems(options, (dialog, which) -> {
+                if (which == 0) {
+                    openGallery();
+                } else {
+                    checkCameraPermission();
+                }
+            });
+            builder.show();
+        } catch (Exception ex) {
+            Log.e(LOG_TAG, "Exception during sho image picker dialog", ex);
+            throw ex;
+        }
     }
 
     // Open the Gallery
     private void openGallery() {
-        Intent intent = new Intent(Intent.ACTION_PICK);
-        intent.setType("image/*");
-        galleryLauncher.launch(intent);
+        try {
+            Intent intent = new Intent(Intent.ACTION_PICK);
+            intent.setType("image/*");
+            galleryLauncher.launch(intent);
+        } catch (Exception ex) {
+            Log.e(LOG_TAG, "Exception during open gallery", ex);
+            throw ex;
+        }
     }
 
     // Check and request Camera permission
     private void checkCameraPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            openCamera();
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+        try {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                openCamera();
+            } else {
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+            }
+        } catch (Exception ex) {
+            Log.e(LOG_TAG, "Exception during check camera permission", ex);
+            throw ex;
         }
     }
 
     // Open the Camera
     private void openCamera() {
-        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            Log.d("CameraTest", "Camera app found!");
-            // Stores the photo file
-            File photoFile = createImageFile();
-            if (photoFile != null) {
-                photoUri = FileProvider.getUriForFile(this, getApplicationContext().getPackageName() + ".provider", photoFile);
-                intent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
-                cameraLauncher.launch(intent);
+        try {
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            if (intent.resolveActivity(getPackageManager()) != null) {
+                Log.d(LOG_TAG, "Camera app found!");
+                // Stores the photo file
+                File photoFile = createImageFile();
+                if (photoFile != null) {
+                    photoUri = FileProvider.getUriForFile(this, getApplicationContext().getPackageName() + ".provider", photoFile);
+                    intent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
+                    cameraLauncher.launch(intent);
+                } else {
+                    Toast.makeText(this, "Error creating file", Toast.LENGTH_SHORT).show();
+                }
             } else {
-                Toast.makeText(this, "Error creating file", Toast.LENGTH_SHORT).show();
+                Log.d(LOG_TAG, "Camera app not found!");
+                Toast.makeText(this, "Camera app not found", Toast.LENGTH_SHORT).show();
             }
-        } else {
-            Log.d("openCamera", "Camera app not found!");
-            Toast.makeText(this, "Camera app not found", Toast.LENGTH_SHORT).show();
+        } catch (Exception ex) {
+            Log.e(LOG_TAG, "Exception during open camera", ex);
+            throw ex;
         }
     }
 
@@ -173,7 +227,7 @@ public class MainActivity extends AppCompatActivity {
             File storageDir = getExternalFilesDir(null);
             return File.createTempFile(timeStamp, "_tmp.jpg", storageDir);
         } catch (IOException ex) {
-            Log.e("createImageFile", "Exception during image creation", ex);
+            Log.e(LOG_TAG, "Exception during image creation", ex);
             Toast.makeText(this, "Failed to create image file", Toast.LENGTH_SHORT).show();
             return null;
         }
@@ -192,7 +246,7 @@ public class MainActivity extends AppCompatActivity {
                     .withMaxResultSize(300, 300)
                     .start(this);
         } catch (Exception ex) {
-            Log.e("launchImageCrop", "Exception during image crop", ex);
+            Log.e(LOG_TAG, "Exception during image crop", ex);
             Toast.makeText(this, "Failed to crop image", Toast.LENGTH_SHORT).show();
         }
     }
@@ -209,7 +263,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         } catch (Exception ex) {
-            Log.e("onActivityResult", "Exception during image crop", ex);
+            Log.e(LOG_TAG, "Exception during image crop", ex);
             Toast.makeText(this, "Failed to crop image", Toast.LENGTH_SHORT).show();
         }
     }
@@ -217,17 +271,16 @@ public class MainActivity extends AppCompatActivity {
     class PredictRunnable implements Runnable {
         @Override
         public void run() {
-            outputText.setText(R.string.predicting);
-            final ModelType modelType = selectedModelType;
-            String predictions = PredictionManager.predict(MainActivity.this, selectedModelType, photoUri);
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if(modelType == selectedModelType) {
-                        outputText.setText(Html.fromHtml(predictions, Html.FROM_HTML_MODE_LEGACY));
-                    }
+            try {
+                runOnUiThread(() -> outputText.setText(R.string.predicting));
+                final ModelType modelType = selectedModelType;
+                String predictions = PredictionManager.predict(MainActivity.this, selectedModelType, photoUri);
+                if (modelType == selectedModelType) {
+                    runOnUiThread(() -> outputText.setText(Html.fromHtml(predictions, Html.FROM_HTML_MODE_LEGACY)));
                 }
-            });
+            } catch(Exception ex) {
+                Log.e(LOG_TAG, "Exception during prediction", ex);
+            }
         }
     }
 
