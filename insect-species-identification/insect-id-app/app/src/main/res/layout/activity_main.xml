@@ -16,20 +16,21 @@
         android:textStyle="bold" />
 
     <LinearLayout
-        android:layout_width="255dp"
+        android:layout_width="379dp"
         android:layout_height="45dp"
         android:layout_marginTop="16dp"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:background="@drawable/border">
 
         <TextView
             android:layout_width="131dp"
             android:layout_height="wrap_content"
             android:layout_marginEnd="0dp"
-            android:gravity="end"
-            android:paddingEnd="0dp"
+            android:padding="5dp"
             android:text="@string/use_model"
             android:textSize="16sp"
+            android:gravity="center"
             android:textStyle="bold" />
 
         <Spinner
@@ -37,8 +38,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="0dp"
-            android:gravity="start"
-            android:paddingStart="0dp" />
+            android:gravity="center"
+            android:padding="5dp" />
 
     </LinearLayout>
 
@@ -68,14 +69,22 @@
         android:layout_marginTop="16dp"
         android:textColor="@android:color/darker_gray"/>
 
-    <TextView
-        android:id="@+id/outputText"
-        android:layout_width="347dp"
-        android:layout_height="232dp"
-        android:layout_marginTop="6dp"
+    <ScrollView
+        android:layout_width="wrap_content"
+        android:layout_height="210dp"
         android:background="@drawable/border"
-        android:gravity="center"
-        android:textSize="18sp" />
+        android:padding="8dp"
+        android:layout_marginTop="6dp">
+
+        <TextView
+            android:id="@+id/outputText"
+            android:layout_width="347dp"
+            android:layout_height="wrap_content"
+            android:minHeight="200dp"
+            android:gravity="center"
+            android:textSize="18sp" />
+    </ScrollView>
+
 
     <TextView
         android:id="@+id/version_text"

@@ -7,58 +7,78 @@ import java.nio.charset.StandardCharsets;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileInputStream;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import android.content.res.AssetFileDescriptor;
+import android.util.Log;
 
 import com.google.gson.Gson;
 
 public class ModelLoader {
 
-    // Function to load model file from assets folder
-    // Function to load model file from assets folder
     public static String assetFilePath(Context context, String assetName) {
         try {
-            // Open the model file from the assets folder
             InputStream is = context.getAssets().open(assetName);
-
-            // Create a temporary file to store the model
             File tempFile = File.createTempFile("model", "tmp", context.getCacheDir());
             tempFile.deleteOnExit();
-
-            // Write the input stream data to the temporary file
             FileOutputStream outputStream = new FileOutputStream(tempFile);
             byte[] buffer = new byte[4 * 1024];
             int bytesRead;
             while ((bytesRead = is.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, bytesRead);
             }
-
             outputStream.close();
-            return tempFile.getAbsolutePath(); // Return the path to the temporary file
+            return tempFile.getAbsolutePath();
         } catch (IOException e) {
-            throw new RuntimeException(e); // Handle error
+            throw new RuntimeException(e);
         }
     }
 
+    private static final Map<String, List<String>> classLabelsCache = new HashMap<>();
+
     public static List<String> loadClassLabels(Context context, String assetName) {
+        if(classLabelsCache.containsKey(assetName)) {
+            return classLabelsCache.get(assetName);
+        }
         List<String> classLabels = null;
         try {
-            // Open the class_labels.json file from the assets folder
             InputStream is = context.getAssets().open(assetName);
             byte[] buffer = new byte[is.available()];
             is.read(buffer);
             is.close();
-
-            // Convert the byte array to a string
             String json = new String(buffer, StandardCharsets.UTF_8);
-
-            // Use Gson to parse the JSON into a List<String>
             Gson gson = new Gson();
             classLabels = gson.fromJson(json, List.class);
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
+        classLabelsCache.put(assetName, classLabels);
         return classLabels;
+    }
+
+    private static final Map<String, Map<String, Map<String, String>>> classDetailsCache = new HashMap<>();
+
+    public static Map<String, Map<String, String>> loadClassDetails(Context context, String assetName) {
+        if(classDetailsCache.containsKey(assetName)) {
+            return classDetailsCache.get(assetName);
+        }
+        Map<String, Map<String, String>> classDetails = Map.of();
+        try {
+            InputStream is = context.getAssets().open(assetName);
+            byte[] buffer = new byte[is.available()];
+            is.read(buffer);
+            is.close();
+            String json = new String(buffer, StandardCharsets.UTF_8);
+            Gson gson = new Gson();
+            classDetails = gson.fromJson(json, Map.class);
+        } catch (IOException ex) {
+            Log.d("loadClassDetails", "Exception loading class", ex);
+            return classDetails;
+        }
+        classDetailsCache.put(assetName, classDetails);
+        return classDetails;
     }
 }
