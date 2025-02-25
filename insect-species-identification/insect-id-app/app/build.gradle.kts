@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+//    id("com.google.gms.google-services")
 }
 
 android {
@@ -29,6 +30,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+//    packaging {
+//        resources {
+//            excludes += "META-INF/INDEX.LIST"
+//            excludes += "META-INF/DEPENDENCIES"
+//            excludes += "META-INF/io.netty.versions.properties"
+//        }
+//    }
 }
 
 dependencies {
@@ -39,10 +47,14 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
-
     implementation(libs.pytorch.android)
     implementation(libs.pytorch.android.torchvision)
     implementation(libs.gson)
     implementation(libs.ucrop)
-
+    implementation(libs.okhttp)
+//    implementation(platform(libs.firebase.bom))
+//    implementation(libs.firebase.analytics)
+//    implementation(libs.firebase.admin)
+//    implementation(libs.google.cloud.storage)
+//    implementation(libs.google.services)
 }

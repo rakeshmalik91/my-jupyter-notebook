@@ -7,21 +7,19 @@ import java.nio.charset.StandardCharsets;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileInputStream;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import android.content.res.AssetFileDescriptor;
 import android.util.Log;
 
 import com.google.gson.Gson;
 
 public class ModelLoader {
 
-    public static String assetFilePath(Context context, String assetName) {
-        try {
-            InputStream is = context.getAssets().open(assetName);
+    public static String loadModel(Context context, String fileName) {
+        File file = new File(context.getCacheDir(), fileName);
+        try(InputStream is = new FileInputStream(file)) {
             File tempFile = File.createTempFile("model", "tmp", context.getCacheDir());
             tempFile.deleteOnExit();
             FileOutputStream outputStream = new FileOutputStream(tempFile);
@@ -32,42 +30,44 @@ public class ModelLoader {
             }
             outputStream.close();
             return tempFile.getAbsolutePath();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (IOException ex) {
+            Log.d(Constants.LOG_TAG, "Exception loading model", ex);
+            throw new RuntimeException(ex);
         }
     }
 
     private static final Map<String, List<String>> classLabelsCache = new HashMap<>();
 
-    public static List<String> loadClassLabels(Context context, String assetName) {
-        if(classLabelsCache.containsKey(assetName)) {
-            return classLabelsCache.get(assetName);
+    public static List<String> loadClassLabels(Context context, String fileName) {
+        if(classLabelsCache.containsKey(fileName)) {
+            return classLabelsCache.get(fileName);
         }
         List<String> classLabels = null;
-        try {
-            InputStream is = context.getAssets().open(assetName);
+        File file = new File(context.getCacheDir(), fileName);
+        try(InputStream is = new FileInputStream(file)) {
             byte[] buffer = new byte[is.available()];
             is.read(buffer);
             is.close();
             String json = new String(buffer, StandardCharsets.UTF_8);
             Gson gson = new Gson();
             classLabels = gson.fromJson(json, List.class);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (IOException ex) {
+            Log.d(Constants.LOG_TAG, "Exception loading class labels", ex);
+            throw new RuntimeException(ex);
         }
-        classLabelsCache.put(assetName, classLabels);
+        classLabelsCache.put(fileName, classLabels);
         return classLabels;
     }
 
     private static final Map<String, Map<String, Map<String, String>>> classDetailsCache = new HashMap<>();
 
-    public static Map<String, Map<String, String>> loadClassDetails(Context context, String assetName) {
-        if(classDetailsCache.containsKey(assetName)) {
-            return classDetailsCache.get(assetName);
+    public static Map<String, Map<String, String>> loadClassDetails(Context context, String fileName) {
+        if(classDetailsCache.containsKey(fileName)) {
+            return classDetailsCache.get(fileName);
         }
         Map<String, Map<String, String>> classDetails = Map.of();
-        try {
-            InputStream is = context.getAssets().open(assetName);
+        File file = new File(context.getCacheDir(), fileName);
+        try(InputStream is = new FileInputStream(file)) {
             byte[] buffer = new byte[is.available()];
             is.read(buffer);
             is.close();
@@ -75,10 +75,10 @@ public class ModelLoader {
             Gson gson = new Gson();
             classDetails = gson.fromJson(json, Map.class);
         } catch (IOException ex) {
-            Log.d("loadClassDetails", "Exception loading class", ex);
+            Log.d(Constants.LOG_TAG, "Exception loading class details", ex);
             return classDetails;
         }
-        classDetailsCache.put(assetName, classDetails);
+        classDetailsCache.put(fileName, classDetails);
         return classDetails;
     }
 }

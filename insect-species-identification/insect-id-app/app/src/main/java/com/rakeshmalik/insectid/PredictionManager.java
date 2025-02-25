@@ -21,13 +21,15 @@ import java.util.stream.Collectors;
 
 public class PredictionManager {
 
+    ModelDownloader modelDownloader;
+
     public static String predict(Context context, ModelType modelType, Uri photoUri) {
-        String modelName = String.format(Constants.MODEL_FILE_NAME_FORMAT, modelType.modelName);
-        String classListName = String.format(Constants.CLASSES_FILE_NAME_FORMAT, modelType.modelName);
-        String classDetailsName = String.format(Constants.CLASS_DETAILS_FILE_NAME_FORMAT, modelType.modelName);
+        String modelName = String.format(Constants.MODEL_FILE_NAME_FMT, modelType.modelName);
+        String classListName = String.format(Constants.CLASSES_FILE_NAME_FMT, modelType.modelName);
+        String classDetailsName = String.format(Constants.CLASS_DETAILS_FILE_NAME_FMT, modelType.modelName);
 
         try {
-            String modelPath = ModelLoader.assetFilePath(context, modelName);
+            String modelPath = ModelLoader.loadModel(context, modelName);
             Module model = Module.load(modelPath);
             List<String> classLabels = ModelLoader.loadClassLabels(context, classListName);
             Map<String, Map<String, String>> classDetails = ModelLoader.loadClassDetails(context, classDetailsName);
