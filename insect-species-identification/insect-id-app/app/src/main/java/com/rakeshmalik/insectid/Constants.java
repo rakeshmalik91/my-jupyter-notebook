@@ -9,6 +9,13 @@ public class Constants {
     public static final String CLASSES_FILE_NAME_FMT = "classes.%s.json";
     public static final String CLASS_DETAILS_FILE_NAME_FMT = "class_details.%s.json";
 
+    // class suffix -> display name
+    public static final Map<String, String> CLASS_SUFFIXES = Map.of(
+            "-early", " (Early Stage)",
+            "-larva", " (Larva)",
+            "-pupa", " (Pupa)"
+    );
+
     public static final String NAME = "name";
     public static final String LOG_TAG = "insect-id";
     public static final String PREF = "insect-id";

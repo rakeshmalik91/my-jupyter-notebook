@@ -13,8 +13,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 import okhttp3.*;
 
@@ -68,7 +66,7 @@ public class ModelDownloader {
 
             downloadFile(classesFileName, classesFileUrl, null, onFailure, "class list", modelType);
             downloadFile(classDetailsFileName, classDetailsFileUrl, null, onFailure, "class details", modelType);
-            downloadFile(modelFileName, modelFileUrl, onSuccess, onFailure, modelType.displayName.toLowerCase() + " model", modelType);
+            downloadFile(modelFileName, modelFileUrl, onSuccess, onFailure, "model (" + modelType.displayName + ")", modelType);
         } catch(Exception ex) {
             if(onFailure != null) {
                 onFailure.run();
@@ -97,6 +95,7 @@ public class ModelDownloader {
                 }
                 File cacheDir = context.getCacheDir();
                 File file = new File(cacheDir, fileName);
+                long startTime = System.currentTimeMillis();
                 try(InputStream inputStream = response.body().byteStream();
                     FileOutputStream outputStream = new FileOutputStream(file); ) {
                     byte[] buffer = new byte[4096];
@@ -107,7 +106,10 @@ public class ModelDownloader {
                         outputStream.write(buffer, 0, bytesRead);
                         downloadedBytes += bytesRead;
                         int progress = (int) ((downloadedBytes * 100) / totalBytes);
-                        String msg = String.format("Downloading %s...\n%d%% (%d/%d MB)", fileType, progress, downloadedBytes/1024/1024, totalBytes/1024/1024);
+                        long elapsedTime = System.currentTimeMillis() - startTime;
+                        long eta = (totalBytes - downloadedBytes) * elapsedTime / downloadedBytes;
+                        String msg = String.format("Downloading %s...\n%d min %d sec remaining\n%d%% (%d/%d MB)",
+                                fileType, eta/60000, (eta%60000)/1000, progress, downloadedBytes/1024/1024, totalBytes/1024/1024);
                         mainHandler.post(() -> outputText.setText(msg));
                     }
                     Log.d(LOG_TAG, "File downloaded successfully: " + file.getAbsolutePath());

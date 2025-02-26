@@ -1,6 +1,7 @@
 package com.rakeshmalik.insectid;
 
 public enum ModelType {
+    LEPIDOPTERA("Butterfly/Moth", "lepidoptera"),
     BUTTERFLY("Butterfly", "butterfly"),
     MOTH("Moth", "moth");
 
