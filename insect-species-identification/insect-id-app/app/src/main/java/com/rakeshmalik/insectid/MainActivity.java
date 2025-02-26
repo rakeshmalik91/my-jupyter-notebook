@@ -38,39 +38,42 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity {
 
     private ImageView imageView;
+    private Button buttonPickImage;
     private TextView outputText;
     private Uri photoUri;
     private ExecutorService executorService;
     private Spinner modelTypeSpinner;
     private ModelType selectedModelType;
     private ModelDownloader modelDownloader;
+    private PredictionManager predictionManager;
+
+    private boolean predicting = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         try {
             super.onCreate(savedInstanceState);
-
             setContentView(R.layout.activity_main);
 
-            Button buttonPickImage = findViewById(R.id.buttonPickImage);
-            imageView = findViewById(R.id.imageView);
-            buttonPickImage.setOnClickListener(v -> showImagePickerDialog());
-
-            outputText = findViewById(R.id.outputText);
-
-            modelTypeSpinner = findViewById(R.id.modelTypeSpinner);
+            this.buttonPickImage = findViewById(R.id.buttonPickImage);
+            this.imageView = findViewById(R.id.imageView);
+            this.buttonPickImage.setOnClickListener(v -> showImagePickerDialog());
+            this.outputText = findViewById(R.id.outputText);
+            this.modelTypeSpinner = findViewById(R.id.modelTypeSpinner);
             createModelTypeSpinner();
 
-            executorService = Executors.newSingleThreadExecutor();
+            this.executorService = Executors.newSingleThreadExecutor();
 
-            modelDownloader = new ModelDownloader(this, outputText);
+            MetadataManager metadataManager = new MetadataManager(outputText);
+            this.modelDownloader = new ModelDownloader(this, outputText, metadataManager);
+            this.predictionManager = new PredictionManager(metadataManager);
         } catch (Exception ex) {
             Log.e(LOG_TAG, "Exception in MainActivity.onCreate()", ex);
             throw ex;
         }
     }
 
-    private final void createModelTypeSpinner() {
+    private void createModelTypeSpinner() {
         try {
             // Convert enum values to a string array for the Spinner
             ModelType[] modelTypes = ModelType.values();
@@ -86,13 +89,21 @@ public class MainActivity extends AppCompatActivity {
 
             // Set listener for Spinner item selection
             modelTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                private int previousSelection = 0;
                 @Override
                 public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                    Log.d(LOG_TAG, "predicting = " + predicting);
+                    if(predicting) {
+                        Log.d(LOG_TAG, "Already predicting...");
+                        modelTypeSpinner.setSelection(previousSelection);
+                        return;
+                    }
                     try {
                         Log.d(LOG_TAG, position + " selected on spinner");
                         selectedModelType = modelTypes[position];
+                        previousSelection = position;
                         if(photoUri != null) {
-                            startPrediction();
+                            downloadModelAndRunPredictionAsync();
                         }
                     } catch (Exception ex) {
                         Log.e(LOG_TAG, "Exception during model type spinner item selection", ex);
@@ -159,6 +170,9 @@ public class MainActivity extends AppCompatActivity {
 
     // Show dialog to choose Gallery or Camera
     private void showImagePickerDialog() {
+        if(predicting) {
+            return;
+        }
         try {
             String[] options = {"Gallery", "Camera"};
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -267,7 +281,7 @@ public class MainActivity extends AppCompatActivity {
                 photoUri = UCrop.getOutput(data);
                 if (photoUri != null) {
                     imageView.setImageURI(photoUri);
-                    startPrediction();
+                    downloadModelAndRunPredictionAsync();
                 }
             }
         } catch (Exception ex) {
@@ -276,28 +290,52 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void startPrediction() {
+    private void downloadModelAndRunPredictionAsync() {
         executorService.submit(new PredictRunnable());
     }
 
+    private void blockPrediction() {
+        predicting = true;
+        runOnUiThread(() -> {
+            modelTypeSpinner.setEnabled(false);
+            buttonPickImage.setEnabled(false);
+        });
+    }
+
+    private void unblockPrediction() {
+        predicting = false;
+        runOnUiThread(() -> {
+            modelTypeSpinner.setEnabled(true);
+            buttonPickImage.setEnabled(true);
+        });
+    }
+
     class PredictRunnable implements Runnable {
+        private void runPrediction() {
+            try {
+                runOnUiThread(() -> outputText.setText(R.string.predicting));
+                final ModelType modelType = selectedModelType;
+                String predictions = predictionManager.predict(MainActivity.this, selectedModelType, photoUri);
+                if (modelType == selectedModelType) {
+                    runOnUiThread(() -> outputText.setText(Html.fromHtml(predictions, Html.FROM_HTML_MODE_LEGACY)));
+                }
+            } catch(Exception ex) {
+                Log.e(LOG_TAG, "Exception during prediction", ex);
+            } finally {
+                unblockPrediction();
+            }
+        }
         @Override
         public void run() {
-            if(!modelDownloader.isModelAlreadyDownloaded(selectedModelType)) {
-                modelDownloader.downloadModel(selectedModelType, (context) -> {
-                    try {
-                        runOnUiThread(() -> outputText.setText(R.string.predicting));
-                        final ModelType modelType = selectedModelType;
-                        String predictions = PredictionManager.predict(MainActivity.this, selectedModelType, photoUri);
-                        if (modelType == selectedModelType) {
-                            runOnUiThread(() -> outputText.setText(Html.fromHtml(predictions, Html.FROM_HTML_MODE_LEGACY)));
-                        }
-                    } catch(Exception ex) {
-                        Log.e(LOG_TAG, "Exception during prediction", ex);
-                    }
-                });
-            } else {
-                executorService.submit(new PredictRunnable());
+            blockPrediction();
+            try {
+                if (!modelDownloader.isModelAlreadyDownloaded(selectedModelType)) {
+                    modelDownloader.downloadModel(selectedModelType, () -> runPrediction(), () -> unblockPrediction());
+                } else {
+                    runPrediction();
+                }
+            } catch(Exception ex) {
+                unblockPrediction();
             }
         }
     }

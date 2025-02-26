@@ -21,9 +21,13 @@ import java.util.stream.Collectors;
 
 public class PredictionManager {
 
-    ModelDownloader modelDownloader;
+    private final MetadataManager metadataManager;
 
-    public static String predict(Context context, ModelType modelType, Uri photoUri) {
+    public PredictionManager(MetadataManager metadataManager) {
+        this.metadataManager = metadataManager;
+    }
+
+    public String predict(Context context, ModelType modelType, Uri photoUri) {
         String modelName = String.format(Constants.MODEL_FILE_NAME_FMT, modelType.modelName);
         String classListName = String.format(Constants.CLASSES_FILE_NAME_FMT, modelType.modelName);
         String classDetailsName = String.format(Constants.CLASS_DETAILS_FILE_NAME_FMT, modelType.modelName);
@@ -52,9 +56,11 @@ public class PredictionManager {
             Log.d(LOG_TAG, "Top " + k + " scores: " + Arrays.stream(predictedClass).map(c -> logitScores[c]).collect(Collectors.toList()));
             Log.d(LOG_TAG, "Top " + k + " softMaxScores: " + Arrays.stream(predictedClass).map(c -> softMaxScores[c]).collect(Collectors.toList()));
 
+            final double minAcceptedSoftmax = metadataManager.getMetadata(modelType).optDouble(FIELD_MIN_ACCEPTED_SOFTMAX);
+            final double minAcceptedLogit = metadataManager.getMetadata(modelType).optDouble(FIELD_MIN_ACCEPTED_LOGIT);
             List<String> predictions = Arrays.stream(predictedClass)
-                    .filter(c -> softMaxScores[c] > MIN_ACCEPTED_SOFTMAX.get(modelType))
-                    .filter(c -> logitScores[c] > MIN_ACCEPTED_LOGIT.get(modelType))
+                    .filter(c -> softMaxScores[c] > minAcceptedSoftmax)
+                    .filter(c -> logitScores[c] > minAcceptedLogit)
                     .map(c -> classNameHtml(classLabels.get(c)) + getSpeciesNameHtml(classLabels.get(c), classDetails) + getScoreHtml(softMaxScores[c]))
                     .collect(Collectors.toList());
             Log.d(LOG_TAG, "Predicted class: " + predictions);
@@ -66,6 +72,7 @@ public class PredictionManager {
     }
 
     private static String classNameHtml(String className) {
+        className = className.replaceAll("-early$", "");
         return "<font color='#FF7755'><i>" + className + "</i></font><br>";
     }
 
@@ -75,9 +82,11 @@ public class PredictionManager {
             speciesName = classDetails.get(className).get(NAME);
         }
         if(speciesName.isBlank()) {
-            speciesName = Arrays.stream(className.replaceAll("-spp$", "-spp.").split("-"))
+            speciesName = Arrays.stream(className.split("-"))
                     .map(s -> s.substring(0, 1).toUpperCase() + s.substring(1))
-                    .collect(Collectors.joining(" "));
+                    .collect(Collectors.joining(" "))
+                    .replaceAll(" Spp$", " spp.")
+                    .replaceAll(" Early$", " (Early Stage)");
         }
         return "<font color='#FFFFFF'>" + speciesName + "</font><br>";
     }
