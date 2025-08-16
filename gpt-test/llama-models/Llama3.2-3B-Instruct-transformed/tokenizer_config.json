@@ -2052,6 +2052,7 @@
   "bos_token": "<|begin_of_text|>",
   "clean_up_tokenization_spaces": true,
   "eos_token": "<|end_of_text|>",
+  "extra_special_tokens": {},
   "model_input_names": [
     "input_ids",
     "attention_mask"
